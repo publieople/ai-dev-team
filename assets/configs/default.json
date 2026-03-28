@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "project": {
+    "name": "",
+    "type": "auto-detect",
+    "tech_stack": []
+  },
+  "workflow": {
+    "auto_approve": false,
+    "require_human_test": true,
+    "max_concurrent_agents": 1,
+    "default_timeout": "2h",
+    "max_retries": 3
+  },
+  "escalation": {
+    "threshold": 3,
+    "consecutive_failures": 3,
+    "timeout_action": "escalate"
+  },
+  "report": {
+    "format": "markdown",
+    "daily_summary": true,
+    "include_diff": true
+  },
+  "git": {
+    "auto_commit": true,
+    "commit_prefix": "[AI]",
+    "traceability": true,
+    "branch_strategy": "direct"
+  },
+  "toon": {
+    "enabled": true,
+    "compression": "aggressive"
+  }
+}
