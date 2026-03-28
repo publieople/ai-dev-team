@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# AI Dev Team runtime (keep structure, ignore logs)
+.ai-dev-team/logs/
+.ai-dev-team/state.json
+.ai-dev-team/tasks/*.json
+.ai-dev-team/reports/execution-*.md
+.ai-dev-team/reports/daily-*.md
+
+# Keep these tracked (templates/examples)
+# .ai-dev-team/config.json (template tracked, instance ignored)
+# .ai-dev-team/reports/project-analysis-*.md (keep examples)
