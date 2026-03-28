@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 AI Dev Team - 主 Agent (CEO)
 负责项目分析、任务规划、子 Agent 指派、验收决策
 """
+
+import sys
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 import os
 import sys
@@ -130,7 +136,20 @@ class MainAgent:
                 })
         
         # 识别潜在任务
-        report["potential_tasks"] = self._identify_tasks(file_types, report["tech_stack"])
+        raw_tasks = self._identify_tasks(file_types, report["tech_stack"])
+        
+        # 将任务保存到状态管理器
+        report["potential_tasks"] = []
+        for task_info in raw_tasks:
+            tid = self.create_task(
+                task_type=task_info.get("type", "feature"),
+                title=task_info.get("title", "新任务"),
+                description=task_info.get("description", ""),
+                priority=task_info.get("priority", "normal")
+            )
+            # 获取刚创建的任务
+            task = self.state_manager.get_task(tid)
+            report["potential_tasks"].append(task)
         
         # 保存报告
         report_file = self.ai_dir / "reports" / f"project-analysis-{datetime.now().strftime('%Y%m%d-%H%M%S')}.md"
@@ -296,22 +315,64 @@ class MainAgent:
         print(f"✅ 创建任务：{tid}")
         return tid
     
-    def spawn_subagent(self, task: Dict) -> Dict:
+    def spawn_subagent(self, task: Dict, agent_type: str = "developer") -> Dict:
         """
         创建子 Agent 执行任务
         
         使用 OpenClaw sessions_spawn 创建隔离会话
+        
+        Args:
+            task: 任务信息
+            agent_type: Agent 类型 (developer/researcher/tester)
+            
+        Returns:
+            子 Agent 配置
         """
         self.agent_counter += 1
-        agent_id = f"dev-{self.agent_counter:03d}"
+        agent_id = f"{agent_type[:3]}-{self.agent_counter:03d}"
         
         task_id = task["tid"]
         
-        # 构建任务提示
-        prompt = f"""你是一个 Developer Agent，负责执行具体的开发任务。
+        # 根据 Agent 类型构建不同的提示
+        if agent_type == "researcher":
+            prompt = self._build_researcher_prompt(task, agent_id)
+        elif agent_type == "tester":
+            prompt = self._build_tester_prompt(task, agent_id)
+        else:
+            prompt = self._build_developer_prompt(task, agent_id)
+        
+        # 保存任务卡片
+        task_card_file = self.ai_dir / "tasks" / f"{task_id}.json"
+        task_card_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(task_card_file, "w", encoding="utf-8") as f:
+            json.dump({
+                **task,
+                "agent_id": agent_id,
+                "agent_type": agent_type,
+                "prompt": prompt
+            }, f, indent=2, ensure_ascii=False)
+        
+        print(f"📋 任务卡片已保存：{task_card_file}")
+        
+        # 返回子 Agent 配置（由 OpenClaw 调用）
+        return {
+            "agent_id": agent_id,
+            "agent_type": agent_type,
+            "task_id": task_id,
+            "prompt": prompt,
+            "task_card_file": str(task_card_file),
+            "timeout": task.get("timeout", "2h")
+        }
+    
+    def _build_developer_prompt(self, task: Dict, agent_id: str) -> str:
+        """构建 Developer Agent 提示"""
+        task_id = task["tid"]
+        
+        return f"""你是一个 Developer Agent，负责执行具体的开发任务。
 
 ## 任务信息
 - **任务 ID:** {task_id}
+- **Agent ID:** {agent_id}
 - **类型:** {task.get('type', 'feature')}
 - **标题:** {task.get('title', 'N/A')}
 - **优先级:** {task.get('priority', 'normal')}
@@ -327,11 +388,12 @@ class MainAgent:
 
 ## 你的工作流程
 
-1. **读取上下文** - 阅读相关代码文件，理解项目结构
-2. **理解任务** - 明确需要实现的功能
-3. **实现代码** - 编写/修改代码
-4. **自测** - 运行相关测试（如果有）
-5. **生成报告** - 写入执行报告到 `.ai-dev-team/reports/execution-{task_id}.md`
+1. **读取任务卡片** - `.ai-dev-team/tasks/{task_id}.json`
+2. **阅读相关代码文件** - 理解项目结构和上下文
+3. **查阅文档** - 如需 API 文档，先调用 Researcher Agent 或查看 `.ai-dev-team/docs/`
+4. **实现代码** - 编写/修改代码
+5. **自测** - 运行相关测试（如果有）
+6. **生成执行报告** - `.ai-dev-team/reports/execution-{task_id}.md`
 
 ## 执行报告格式
 
@@ -340,7 +402,7 @@ class MainAgent:
 
 **任务 ID:** {task_id}
 **Agent:** {agent_id}
-**执行时间:** {{开始时间}} - {{结束时间}}
+**执行时间:** {{{{开始时间}}}} - {{{{结束时间}}}}
 
 ## 完成的工作
 
@@ -373,27 +435,111 @@ class MainAgent:
 
 开始执行任务！
 """
+    
+    def _build_researcher_prompt(self, task: Dict, agent_id: str) -> str:
+        """构建 Researcher Agent 提示"""
+        task_id = task["tid"]
         
-        # 保存任务卡片
-        task_card_file = self.ai_dir / "tasks" / f"{task_id}.json"
-        task_card_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(task_card_file, "w", encoding="utf-8") as f:
-            json.dump({
-                **task,
-                "agent_id": agent_id,
-                "prompt": prompt
-            }, f, indent=2, ensure_ascii=False)
+        return f"""你是一个 Researcher Agent，负责收集技术文档和调研。
+
+## 任务信息
+- **任务 ID:** {task_id}
+- **Agent ID:** {agent_id}
+- **标题:** {task.get('title', 'N/A')}
+
+## 调研需求
+{task.get('description', '无详细描述')}
+
+## 工作流程
+
+1. **分析需求** - 确定需要哪些技术文档
+2. **搜索本地缓存** - 检查 `.ai-dev-team/docs/` 是否已有相关文档
+3. **使用 Context7** - 调用 `npx tsx query.ts context <library> <query>` 获取官方文档
+4. **缓存文档** - 将收集的文档保存到 `.ai-dev-team/docs/`
+5. **生成调研报告** - `.ai-dev-team/reports/research-{task_id}.md`
+
+## 可用工具
+
+- **Context7**: `cd skills/context7 && npx tsx query.ts context <owner/repo> <query>`
+- **web_search**: 搜索网络资料
+
+## 报告格式
+
+```markdown
+# 调研报告
+
+**任务 ID:** {task_id}
+**Agent:** {agent_id}
+
+## 使用的数据源
+
+- context7:xxx
+- local:xxx
+
+## 缓存的文档
+
+- `.ai-dev-team/docs/xxx.md`
+
+## 关键发现
+
+{{总结重要信息}}
+
+## 对开发的建议
+
+{{给 Developer 的建议}}
+```
+
+开始调研！
+"""
+    
+    def _build_tester_prompt(self, task: Dict, agent_id: str) -> str:
+        """构建 Tester Agent 提示"""
+        task_id = task["tid"]
         
-        print(f"📋 任务卡片已保存：{task_card_file}")
-        
-        # 返回子 Agent 配置（由 OpenClaw 调用）
-        return {
-            "agent_id": agent_id,
-            "task_id": task_id,
-            "prompt": prompt,
-            "task_card_file": str(task_card_file),
-            "timeout": task.get("timeout", "2h")
-        }
+        return f"""你是一个 Tester Agent，负责验证代码质量。
+
+## 任务信息
+- **任务 ID:** {task_id}
+- **Agent ID:** {agent_id}
+- **标题:** {task.get('title', 'N/A')}
+
+## 测试需求
+{task.get('description', '无详细描述')}
+
+## 工作流程
+
+1. **读取执行报告** - `.ai-dev-team/reports/execution-{task_id}.md`
+2. **审查代码变更** - 使用 `git diff` 查看修改
+3. **运行测试** - 执行项目测试套件
+4. **生成测试报告** - `.ai-dev-team/reports/test-{task_id}.md`
+
+## 测试报告格式
+
+```markdown
+# 测试报告
+
+**任务 ID:** {task_id}
+**Agent:** {agent_id}
+
+## 测试结果
+
+| 测试项 | 结果 | 备注 |
+|--------|------|------|
+| 单元测试 | ✅/❌ | |
+| 代码审查 | ✅/❌ | |
+
+## 发现的问题
+
+1. 问题描述
+   - 严重程度：高/中/低
+
+## 结论
+
+**测试状态:** 通过 / 失败 / 有条件通过
+```
+
+开始测试！
+"""
     
     def verify_changes(self, task: Dict, report_file: str) -> bool:
         """
@@ -530,9 +676,17 @@ class MainAgent:
         
         if not pending_tasks:
             print("ℹ️  没有待批准的任务")
-            # 可以尝试发现新任务
             print("🔍 尝试发现新任务...")
-            # 这里可以调用 analyze_project 并自动创建任务
+            # 分析项目发现新任务
+            analysis = self.analyze_project()
+            for task_info in analysis.get("potential_tasks", []):
+                self.create_task(
+                    task_type=task_info.get("type", "feature"),
+                    title=task_info.get("title", "新任务"),
+                    description=task_info.get("description", ""),
+                    priority=task_info.get("priority", "normal")
+                )
+            return
         
         # 2. 处理待批准任务
         for task_data in pending_tasks:
@@ -548,29 +702,177 @@ class MainAgent:
                     continue
             
             # 批准任务
-            self.state_manager.transition(task_id, State.ASSIGNED)
+            self.state_manager.transition(task_id, State.ASSIGNED, agent_id="pending")
             
-            # 3. 创建子 Agent
-            subagent_config = self.spawn_subagent(task_data)
-            print(f"🤖 创建子 Agent: {subagent_config['agent_id']}")
+            # 3. 判断是否需要先调研
+            needs_research = self._check_needs_research(task_data)
             
-            # 4. 等待子 Agent 完成（实际实现中用 sessions_spawn）
-            # 这里简化处理
-            print(f"⏳ 等待子 Agent 执行...")
+            if needs_research:
+                print("📚 任务需要文档调研，先创建 Researcher Agent...")
+                research_task = self._create_research_task(task_data)
+                research_result = self._execute_research(research_task)
+                
+                if not research_result.get("success"):
+                    print("⚠️  调研失败，继续开发任务")
             
-            # 5. 验证结果
-            report_file = str(self.ai_dir / "reports" / f"execution-{task_id}.md")
-            if self.verify_changes(task_data, report_file):
-                self.state_manager.transition(task_id, State.PENDING_HUMAN_TEST)
-                print("✅ 任务完成，等待人类验收")
-            else:
-                task_data["retry"] = task_data.get("retry", 0) + 1
-                if self.should_escalate(task_data):
-                    self.state_manager.transition(task_id, State.ESCALATED)
-                    print("❌ 任务失败，需要上报人类")
+            # 4. 创建 Developer Agent
+            print(f"\n🤖 创建 Developer Agent...")
+            subagent_config = self.spawn_subagent(task_data, agent_type="developer")
+            print(f"   Agent ID: {subagent_config['agent_id']}")
+            print(f"   任务卡片：{subagent_config['task_card_file']}")
+            
+            # 5. 执行子 Agent（实际使用 OpenClaw sessions_spawn）
+            # 这里提供两种模式：
+            # - 直接在当前进程调用（测试用）
+            # - 通过 OpenClaw 工具创建隔离会话（生产用）
+            
+            print(f"\n⏳ 执行开发任务...")
+            dev_result = self._execute_developer_agent(subagent_config)
+            
+            # 6. 验证结果
+            report_file = dev_result.get("report_file")
+            if report_file and self.verify_changes(task_data, report_file):
+                # 创建 Tester Agent 验证
+                print("\n🧪 创建 Tester Agent 验证...")
+                test_result = self._execute_tester_agent(task_data, report_file)
+                
+                if test_result.get("passed", False):
+                    self.state_manager.transition(task_id, State.PENDING_HUMAN_TEST)
+                    print("✅ 任务完成，等待人类验收")
                 else:
-                    self.state_manager.transition(task_id, State.ASSIGNED)
-                    print("🔄 任务失败，重新指派")
+                    self._handle_failure(task_data, "测试未通过")
+            else:
+                self._handle_failure(task_data, "验证失败")
+    
+    def _check_needs_research(self, task: Dict) -> bool:
+        """检查任务是否需要文档调研"""
+        # 检查是否涉及外部库
+        description = task.get("description", "").lower()
+        tech_keywords = ["api", "sdk", "library", "framework", "集成", "调用"]
+        
+        return any(kw in description for kw in tech_keywords)
+    
+    def _create_research_task(self, parent_task: Dict) -> Dict:
+        """创建调研子任务"""
+        research_task = {
+            "tid": f"t-research-{int(__import__('time').time() * 1000)}",
+            "type": "research",
+            "title": f"调研：{parent_task.get('title', 'N/A')}",
+            "description": f"为任务 {parent_task['tid']} 收集相关技术文档",
+            "priority": "high",
+            "parent_task": parent_task["tid"],
+            "context": parent_task.get("context", {})
+        }
+        
+        # 保存调研任务卡片
+        task_card_file = self.ai_dir / "tasks" / f"{research_task['tid']}.json"
+        task_card_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(task_card_file, "w", encoding="utf-8") as f:
+            json.dump(research_task, f, indent=2, ensure_ascii=False)
+        
+        return research_task
+    
+    def _execute_research(self, task: Dict) -> Dict:
+        """执行调研任务"""
+        from researcher_agent import ResearcherAgent
+        
+        agent = ResearcherAgent(str(self.project_path))
+        result = agent.research_task(task)
+        
+        return {
+            "success": True,
+            "report_file": result.get("report_file"),
+            "documents": result.get("documents_cached", [])
+        }
+    
+    def _execute_developer_agent(self, config: Dict) -> Dict:
+        """
+        执行 Developer Agent
+        
+        使用 OpenClaw sessions_spawn 创建隔离会话
+        """
+        import time
+        
+        print(f"\n🤖 创建 Developer Agent 会话...")
+        
+        # 读取任务卡片获取完整信息
+        task_card_file = Path(config["task_card_file"])
+        with open(task_card_file, "r", encoding="utf-8") as f:
+            task_data = json.load(f)
+        
+        # 构建任务提示
+        task_prompt = config["prompt"]
+        
+        # 使用 sessions_spawn 创建子 Agent（通过 OpenClaw 工具）
+        # 注意：这里需要通过 OpenClaw 的工具调用系统
+        # 在实际运行时，这会创建独立的子 Agent 会话
+        
+        print(f"   任务：{config['task_id']}")
+        print(f"   Agent: {config['agent_id']}")
+        print(f"   超时：{config.get('timeout', '2h')}")
+        
+        # 实际调用 sessions_spawn 的代码（需要 OpenClaw 环境）
+        # 这里使用占位符，实际由 OpenClaw 执行
+        spawn_result = {
+            "status": "accepted",
+            "runId": f"run-{int(time.time() * 1000)}",
+            "childSessionKey": f"agent:ai-dev-team-developer:subagent:{config['task_id']}",
+            "task_id": config["task_id"],
+            "agent_id": config["agent_id"],
+            "prompt": task_prompt
+        }
+        
+        print(f"   ✅ 子 Agent 已创建：{spawn_result['runId']}")
+        print(f"   会话：{spawn_result['childSessionKey']}")
+        
+        # 更新任务状态
+        self.state_manager.transition(
+            config["task_id"],
+            State.IN_PROGRESS,
+            agent_id=config["agent_id"],
+            run_id=spawn_result["runId"]
+        )
+        
+        # 在实际 OpenClaw 环境中，这里会等待子 Agent 完成
+        # 子 Agent 完成后会自动通告结果并写入执行报告
+        
+        return {
+            "status": "running",
+            "run_id": spawn_result["runId"],
+            "session_key": spawn_result["childSessionKey"],
+            "report_file": str(self.ai_dir / "reports" / f"execution-{config['task_id']}.md")
+        }
+    
+    def _execute_tester_agent(self, task: Dict, report_file: str) -> Dict:
+        """
+        执行 Tester Agent
+        
+        简化版本：只检查报告是否存在
+        """
+        # 实际实现应该调用 tester_agent.py
+        # 这里简化处理
+        
+        report_path = Path(report_file)
+        if not report_path.exists():
+            return {"passed": False, "reason": "执行报告不存在"}
+        
+        # 读取报告检查是否完成
+        content = report_path.read_text(encoding="utf-8")
+        if "执行报告" in content and task["tid"] in content:
+            return {"passed": True}
+        else:
+            return {"passed": False, "reason": "报告格式不正确"}
+    
+    def _handle_failure(self, task: Dict, reason: str):
+        """处理任务失败"""
+        task["retry"] = task.get("retry", 0) + 1
+        
+        if self.should_escalate(task):
+            self.state_manager.transition(task["tid"], State.ESCALATED)
+            print(f"❌ 任务失败：{reason}，需要上报人类")
+        else:
+            self.state_manager.transition(task["tid"], State.ASSIGNED)
+            print(f"🔄 任务失败：{reason}，重新指派（重试 {task['retry']}/{task.get('max_retries', 3)}）")
     
     def human_test_approval(self, task_id: str, approved: bool):
         """

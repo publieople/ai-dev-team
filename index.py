@@ -1,260 +1,399 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-AI Dev Team - OpenClaw Skill 入口
-
-提供以下命令：
-- @ai-dev-team init      - 初始化项目
-- @ai-dev-team analyze   - 分析项目
-- @ai-dev-team plan      - 生成开发规划
-- @ai-dev-team start     - 开始开发循环
-- @ai-dev-team status    - 查看状态
-- @ai-dev-team approve   - 验收任务
+AI Dev Team - 命令行入口
+通过 OpenClaw 调用
 """
 
 import sys
 import os
 import json
-import subprocess
+import argparse
 from pathlib import Path
+from datetime import datetime
 
-# 添加 scripts 目录到路径
+# 添加脚本目录到路径
 script_dir = Path(__file__).parent / "scripts"
 sys.path.insert(0, str(script_dir))
 
-def run_command(command: str, args: list):
-    """运行主 Agent 命令"""
-    from main_agent import MainAgent
-    
-    agent = MainAgent(".")
-    
-    if command == "init":
-        return cmd_init(agent, args)
-    elif command == "analyze":
-        return cmd_analyze(agent, args)
-    elif command == "plan":
-        return cmd_plan(agent, args)
-    elif command == "start":
-        return cmd_start(agent, args)
-    elif command == "status":
-        return cmd_status(agent, args)
-    elif command == "approve":
-        return cmd_approve(agent, args)
-    else:
-        return {"error": f"未知命令：{command}"}
+from main_agent import MainAgent
+from state_manager import State
 
-def cmd_init(agent, args):
+def cmd_init(args):
     """初始化项目"""
-    from init_project import init_project
+    print("🚀 初始化 AI Dev Team 项目...\n")
     
-    project_path = args[0] if args else "."
-    init_project(project_path)
+    project_path = Path(args.path).resolve()
+    ai_dir = project_path / ".ai-dev-team"
     
-    return {
-        "status": "success",
-        "message": "项目初始化完成",
-        "next_step": "运行 '@ai-dev-team analyze' 开始项目分析"
+    # 检查是否是 Git 仓库
+    if not (project_path / ".git").exists():
+        print("⚠️  警告：当前目录不是 Git 仓库")
+        response = input("是否继续？(y/n): ").strip().lower()
+        if response != 'y':
+            print("已取消")
+            return
+    
+    # 创建目录结构
+    dirs = ["tasks", "reports", "docs", "logs"]
+    for d in dirs:
+        (ai_dir / d).mkdir(parents=True, exist_ok=True)
+        print(f"  ✓ 创建目录：.ai-dev-team/{d}/")
+    
+    # 复制默认配置
+    default_config = Path(__file__).parent / "assets" / "configs" / "default.json"
+    if default_config.exists():
+        config_content = default_config.read_text(encoding="utf-8")
+        # 更新项目名称
+        config = json.loads(config_content)
+        config["project"]["name"] = project_path.name
+        config["project"]["type"] = "auto-detect"
+        
+        config_file = ai_dir / "config.json"
+        config_file.write_text(json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"  ✓ 创建配置：.ai-dev-team/config.json")
+    
+    # 创建初始状态文件
+    initial_state = {
+        "v": 1,
+        "tasks": {},
+        "queue": [],
+        "active": None,
+        "initialized_at": datetime.now().isoformat()
     }
+    state_file = ai_dir / "state.json"
+    state_file.write_text(json.dumps(initial_state, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"  ✓ 创建状态：.ai-dev-team/state.json")
+    
+    # 创建 README
+    readme = ai_dir / "README.md"
+    readme_content = f"""# AI Dev Team 项目
 
-def cmd_analyze(agent, args):
+**项目名称:** {project_path.name}
+**初始化时间:** {datetime.now().isoformat()}
+
+## 目录结构
+
+```
+.ai-dev-team/
+├── config.json    # 配置
+├── state.json     # 状态机
+├── tasks/         # 任务卡片
+├── reports/       # 报告
+├── docs/          # 文档缓存
+└── logs/          # 日志
+```
+
+## 快速开始
+
+```bash
+# 分析项目
+@ai-dev-team analyze
+
+# 生成规划
+@ai-dev-team plan
+
+# 开始开发
+@ai-dev-team start
+
+# 查看状态
+@ai-dev-team status
+```
+
+## 命令
+
+| 命令 | 说明 |
+|------|------|
+| `init` | 初始化项目 |
+| `analyze` | 分析项目 |
+| `plan` | 生成规划 |
+| `start` | 开始开发循环 |
+| `status` | 查看状态 |
+| `approve` | 验收任务 |
+| `escalations` | 查看上报 |
+
+---
+
+*由 AI Dev Team 管理*
+"""
+    readme.write_text(readme_content, encoding="utf-8")
+    print(f"  ✓ 创建说明：.ai-dev-team/README.md")
+    
+    print("\n✅ 项目初始化完成！")
+    print(f"\n下一步：运行 `@ai-dev-team analyze` 分析项目")
+
+
+def cmd_analyze(args):
     """分析项目"""
+    print("🔍 分析项目...\n")
+    
+    agent = MainAgent(args.path)
     report = agent.analyze_project()
     
-    return {
-        "status": "success",
-        "report": report,
-        "message": f"项目分析完成，识别到 {len(report.get('potential_tasks', []))} 个潜在任务",
-        "next_step": "运行 '@ai-dev-team plan' 生成开发规划"
-    }
-
-def cmd_plan(agent, args):
-    """生成开发规划"""
-    ai_dir = agent.ai_dir
+    print(f"\n📊 分析结果:")
+    print(f"  技术栈：{', '.join([t['name'] for t in report['tech_stack']]) or '未识别'}")
+    print(f"  文件数：{report['file_stats'].get('total_files', 0)}")
+    print(f"  潜在任务：{len(report['potential_tasks'])}")
     
-    # 读取最近的分析报告
-    reports_dir = ai_dir / "reports"
+    if report['potential_tasks']:
+        print("\n📋 识别的任务:")
+        for i, task in enumerate(report['potential_tasks'][:5], 1):
+            print(f"  {i}. {task['title']} ({task['priority']})")
+    
+    print(f"\n📄 详细报告：{report['report_file']}")
+    print("\n下一步：运行 `@ai-dev-team plan` 生成详细规划")
+
+
+def cmd_plan(args):
+    """生成规划"""
+    print("📝 生成开发规划...\n")
+    
+    agent = MainAgent(args.path)
+    
+    # 加载分析结果
+    reports_dir = agent.ai_dir / "reports"
     analysis_reports = list(reports_dir.glob("project-analysis-*.md"))
     
     if not analysis_reports:
-        return {
-            "status": "error",
-            "message": "未找到项目分析报告，请先运行 '@ai-dev-team analyze'"
-        }
+        print("⚠️  未找到项目分析报告，先运行 `@ai-dev-team analyze`")
+        return
     
-    # 获取最新报告
+    # 读取最新分析报告
     latest_report = sorted(analysis_reports)[-1]
+    print(f"📖 读取报告：{latest_report.name}")
     
-    # 读取分析的任务
-    from state_manager import StateManager
-    sm = StateManager(".")
+    # 从状态文件加载已发现的任务
+    pending_tasks = agent.state_manager.list_tasks(State.DISCOVERED)
     
-    # 从分析报告中提取任务（简化处理）
-    # 实际实现中应该解析 Markdown 或直接使用分析结果
+    if not pending_tasks:
+        # 自动创建任务
+        print("\n📋 从分析报告创建任务...")
+        # 这里简化处理，实际应该解析报告
+        print("  （任务已在分析时自动创建）")
     
-    plan_file = reports_dir / f"dev-plan-{agent.state_manager._load() or 'v1'}.md"
+    # 生成规划报告
+    plan_file = reports_dir / f"development-plan-{datetime.now().strftime('%Y%m%d-%H%M%S')}.md"
     
     plan_content = f"""# 开发规划
 
-**生成时间:** {agent.state_manager._load()}
-**基于报告:** {latest_report.name}
+**生成时间:** {datetime.now().isoformat()}
+**项目:** {agent.project_path.name}
 
 ---
 
-## 任务列表
+## 任务队列
+
+共 {len(pending_tasks)} 个待规划任务：
 
 """
     
-    # 获取发现状态的任务
-    discovered_tasks = sm.list_tasks()
-    
-    if not discovered_tasks:
-        plan_content += "暂无待规划任务。\n\n"
-    else:
-        for i, task in enumerate(discovered_tasks[:10], 1):
-            plan_content += f"""
-### {i}. {task.get('title', '未命名任务')}
+    for i, task in enumerate(pending_tasks[:10], 1):
+        plan_content += f"""
+### {i}. {task.get('title', 'N/A')}
 
-- **类型:** {task.get('type', 'unknown')}
+- **ID:** {task['tid']}
+- **类型:** {task.get('type', 'feature')}
 - **优先级:** {task.get('priority', 'normal')}
-- **描述:** {task.get('description', '无描述')}
+- **描述:** {task.get('description', 'N/A')}
+
+**建议:**
+- 先收集相关文档
+- 实现核心功能
+- 编写测试
+- 代码审查
 
 """
     
-    plan_content += """
+    if len(pending_tasks) > 10:
+        plan_content += f"\n*还有 {len(pending_tasks) - 10} 个任务未列出...*\n"
+    
+    plan_content += f"""
 ---
 
-## 执行顺序
+## 执行顺序建议
 
-任务将按优先级依次执行：
-
-1. 高优先级任务优先
-2. 依赖关系自动排序
-3. 每次只执行一个任务（避免冲突）
-
----
+1. **高优先级任务** - 先处理基础设施和配置
+2. **中优先级任务** - 核心功能开发
+3. **低优先级任务** - 优化和文档
 
 ## 下一步
 
-运行 `@ai-dev-team start` 开始开发循环。
+运行 `@ai-dev-team start` 开始开发循环
+
+---
 
 *规划由 AI Dev Team 主 Agent 生成*
 """
     
     plan_file.write_text(plan_content, encoding="utf-8")
+    print(f"\n✅ 规划已生成：{plan_file}")
     
-    return {
-        "status": "success",
-        "plan_file": str(plan_file),
-        "task_count": len(discovered_tasks),
-        "message": f"开发规划已生成，共 {len(discovered_tasks)} 个任务",
-        "next_step": "运行 '@ai-dev-team start' 开始开发循环"
-    }
+    # 将任务转移到待批准状态
+    for task in pending_tasks:
+        try:
+            agent.state_manager.transition(task['tid'], State.PENDING_APPROVAL)
+        except ValueError:
+            pass  # 状态转换不合法则跳过
+    
+    print(f"\n📋 {len(pending_tasks)} 个任务已加入待批准队列")
+    print("\n下一步：运行 `@ai-dev-team start` 开始开发")
 
-def cmd_start(agent, args):
+
+def cmd_start(args):
     """开始开发循环"""
-    auto_approve = "--auto-approve" in args
+    print("🚀 开始开发循环...\n")
     
-    # 获取待处理任务
-    from state_manager import StateManager, State
-    sm = StateManager(".")
-    
-    pending_tasks = sm.list_tasks(State.PENDING_APPROVAL)
-    discovered_tasks = sm.list_tasks(State.DISCOVERED)
-    
-    if not pending_tasks and not discovered_tasks:
-        return {
-            "status": "info",
-            "message": "没有待处理的任务",
-            "suggestion": "运行 '@ai-dev-team analyze' 发现新任务"
-        }
-    
-    # 将发现的任务转为待批准
-    for task in discovered_tasks:
-        sm.transition(task["tid"], State.PENDING_APPROVAL)
-    
-    # 开始开发循环
-    agent.run_development_cycle(auto_approve=auto_approve)
-    
-    return {
-        "status": "success",
-        "message": "开发循环已启动",
-        "pending_tasks": len(pending_tasks) + len(discovered_tasks)
-    }
+    agent = MainAgent(args.path)
+    agent.run_development_cycle(auto_approve=args.auto_approve)
 
-def cmd_status(agent, args):
+
+def cmd_status(args):
     """查看状态"""
+    agent = MainAgent(args.path)
     stats = agent.status()
     
-    # 获取详细任务列表
-    from state_manager import StateManager, State
-    sm = StateManager(".")
+    print(f"📊 AI Dev Team 状态\n")
+    print(f"  总任务数：{stats['total']}")
+    print(f"  ✅ 已完成：{stats['completed']}")
+    print(f"  🚧 进行中：{stats['active']}")
+    print(f"  ⏳ 待批准：{stats['pending']}")
+    print(f"  ⚠️  已上报：{stats['escalated']}")
     
-    all_tasks = sm.list_tasks()
+    # 显示活跃任务
+    active = agent.state_manager.get_active_task()
+    if active:
+        print(f"\n🔥 当前活跃任务:")
+        print(f"  ID: {active['tid']}")
+        print(f"  标题：{active.get('title', 'N/A')}")
+        print(f"  Agent: {active.get('agent_id', 'N/A')}")
     
-    status_by_state = {}
-    for task in all_tasks:
-        state = task.get("s", "unknown")
-        if state not in status_by_state:
-            status_by_state[state] = []
-        status_by_state[state].append({
-            "tid": task["tid"],
-            "title": task.get("title", "未命名"),
-            "type": task.get("type", "unknown")
-        })
-    
-    return {
-        "status": "success",
-        "stats": stats,
-        "tasks_by_state": status_by_state,
-        "message": f"共 {stats['total']} 个任务，{stats['completed']} 已完成，{stats['active']} 进行中"
-    }
+    # 显示待批准任务
+    pending = agent.state_manager.list_tasks(State.PENDING_APPROVAL)
+    if pending:
+        print(f"\n⏳ 待批准任务 ({len(pending)}):")
+        for task in pending[:5]:
+            print(f"  - {task['tid']}: {task.get('title', 'N/A')}")
 
-def cmd_approve(agent, args):
+
+def cmd_approve(args):
     """验收任务"""
-    # 解析参数
-    task_id = None
-    approved = True
+    agent = MainAgent(args.path)
     
-    for arg in args:
-        if arg.startswith("--task-id="):
-            task_id = arg.split("=")[1]
-        elif arg.startswith("--reject"):
-            approved = False
+    if not args.task_id:
+        # 列出待验收任务
+        pending = agent.state_manager.list_tasks(State.PENDING_HUMAN_TEST)
+        
+        if not pending:
+            print("ℹ️  没有待验收的任务")
+            return
+        
+        print("⏳ 待验收任务:\n")
+        for task in pending:
+            print(f"  ID: {task['tid']}")
+            print(f"  标题：{task.get('title', 'N/A')}")
+            print(f"  Agent: {task.get('agent_id', 'N/A')}")
+            print()
+        
+        print("使用 `@ai-dev-team approve --task-id=<id> --approved=true/false` 进行验收")
+        return
     
-    if not task_id:
-        return {
-            "status": "error",
-            "message": "需要指定任务 ID，使用 --task-id=<id>"
-        }
+    # 验收指定任务
+    approved = args.approved if args.approved is not None else True
+    agent.human_test_approval(args.task_id, approved)
+
+
+def cmd_escalations(args):
+    """查看上报"""
+    agent = MainAgent(args.path)
     
-    agent.human_test_approval(task_id, approved)
+    escalated = agent.state_manager.list_tasks(State.ESCALATED)
+    human_escalation = agent.state_manager.list_tasks(State.HUMAN_ESCALATION)
     
-    return {
-        "status": "success",
-        "task_id": task_id,
-        "approved": approved,
-        "message": f"任务 {task_id} 已{'批准' if approved else '拒绝'}"
-    }
+    print("⚠️  上报任务\n")
+    
+    if escalated:
+        print(f"需要处理的上报 ({len(escalated)}):")
+        for task in escalated:
+            print(f"\n  ID: {task['tid']}")
+            print(f"  标题：{task.get('title', 'N/A')}")
+            print(f"  重试次数：{task.get('retry', 0)}")
+            print(f"  Agent: {task.get('agent_id', 'N/A')}")
+    else:
+        print("  没有需要处理的上报")
+    
+    if human_escalation:
+        print(f"\n等待人类决策 ({len(human_escalation)}):")
+        for task in human_escalation:
+            print(f"  - {task['tid']}: {task.get('title', 'N/A')}")
+
+
+def cmd_research(args):
+    """执行文档调研"""
+    from researcher_agent import ResearcherAgent
+    
+    print("📚 执行文档调研...\n")
+    
+    agent = ResearcherAgent(args.path)
+    
+    if args.library and args.query:
+        print(f"搜索：{args.library} - {args.query}")
+        result = agent.get_context7_context(args.library, args.query)
+        
+        if result:
+            print(f"\n{result['content']}")
+        else:
+            print("未找到相关文档")
+    else:
+        print("用法：@ai-dev-team research --library=<lib> --query=<query>")
+
 
 def main():
     """主入口"""
-    # 解析命令
-    if len(sys.argv) < 2:
-        print("用法：@ai-dev-team <command> [args]")
-        print("命令：init, analyze, plan, start, status, approve")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="AI Dev Team - 自主开发团队",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  @ai-dev-team init          # 初始化项目
+  @ai-dev-team analyze       # 分析项目
+  @ai-dev-team plan          # 生成规划
+  @ai-dev-team start         # 开始开发
+  @ai-dev-team status        # 查看状态
+  @ai-dev-team approve       # 验收任务
+        """
+    )
     
-    command = sys.argv[1]
-    args = sys.argv[2:]
+    parser.add_argument("command", nargs="?", default="status",
+                        choices=["init", "analyze", "plan", "start", "status", 
+                                 "approve", "escalations", "research"],
+                        help="命令")
+    parser.add_argument("--path", default=".", help="项目路径")
+    parser.add_argument("--auto-approve", action="store_true", help="自动批准任务")
+    parser.add_argument("--task-id", help="任务 ID")
+    parser.add_argument("--approved", type=lambda x: x.lower() == 'true', 
+                        help="是否批准 (true/false)")
+    parser.add_argument("--library", help="库名称（用于 research）")
+    parser.add_argument("--query", help="查询内容（用于 research）")
     
-    try:
-        result = run_command(command, args)
-        print(json.dumps(result, indent=2, ensure_ascii=False))
-    except Exception as e:
-        print(json.dumps({
-            "status": "error",
-            "message": str(e)
-        }, indent=2, ensure_ascii=False))
-        sys.exit(1)
+    args = parser.parse_args()
+    
+    # 命令分发
+    commands = {
+        "init": cmd_init,
+        "analyze": cmd_analyze,
+        "plan": cmd_plan,
+        "start": cmd_start,
+        "status": cmd_status,
+        "approve": cmd_approve,
+        "escalations": cmd_escalations,
+        "research": cmd_research
+    }
+    
+    if args.command in commands:
+        commands[args.command](args)
+    else:
+        parser.print_help()
+
 
 if __name__ == "__main__":
     main()

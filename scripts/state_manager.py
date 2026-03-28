@@ -26,7 +26,7 @@ class State(Enum):
     REASSIGNING = "R"
 
 STATE_TRANSITIONS = {
-    State.DISCOVERED: [State.ANALYZING],
+    State.DISCOVERED: [State.ANALYZING, State.PENDING_APPROVAL],  # 允许直接批准
     State.ANALYZING: [State.PLANNING, State.HUMAN_ESCALATION],
     State.PLANNING: [State.PENDING_APPROVAL],
     State.PENDING_APPROVAL: [State.ASSIGNED, State.CANCELLED],
