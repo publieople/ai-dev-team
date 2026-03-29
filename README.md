@@ -50,7 +50,7 @@ cd /path/to/project
 # 在 webchat 中发送：初始化 AI Dev Team
 ```
 
-详细步骤见 **[QUICKSTART.md](QUICKSTART.md)**
+详细步骤见 **[docs/QUICKSTART.md](docs/QUICKSTART.md)**
 
 ---
 
@@ -224,8 +224,10 @@ skills/ai-dev-team/
 
 | 文档 | 说明 |
 |------|------|
-| [QUICKSTART.md](QUICKSTART.md) | 5 分钟快速开始 |
-| [SKILL.md](SKILL.md) | 技能说明（行为协议） |
+| [SKILL.md](SKILL.md) | 技能说明（主 Agent 提示词） |
+| [docs/QUICKSTART.md](docs/QUICKSTART.md) | 5 分钟快速开始 |
+| [docs/SETUP_AND_TEST.md](docs/SETUP_AND_TEST.md) | 配置与测试指南 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | 更新日志 |
 | [references/architecture.md](references/architecture.md) | 详细架构设计 |
 | [references/state-machine.md](references/state-machine.md) | 状态机说明 |
 | [references/task-protocol.md](references/task-protocol.md) | 任务协议 |
@@ -280,21 +282,17 @@ skills/ai-dev-team/
 
 ### ✅ v1.2.0 已完成
 
-- [x] 提示词驱动的主 Agent（无需 Python 脚本）
-- [x] 主 Agent 和子 Agent SOUL.md
-- [x] sessions_spawn 集成指南
+- [x] 提示词驱动的主 Agent
+- [x] sessions_spawn 集成
 - [x] 状态机引擎
 - [x] Git 可追溯提交
-- [x] 报告系统
 - [x] 配置示例
 
 ### ⏸️ 后续版本
 
 - [ ] 心跳集成
-- [ ] Context7 文档集成
+- [ ] Context7 集成
 - [ ] 多模态截图
-- [ ] GitHub Actions 集成
-- [ ] 多项目管理
 
 ---
 
