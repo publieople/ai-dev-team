@@ -38,15 +38,15 @@
 - `README.md` - 反映 v1.2.0 架构
 - `agents/main/SOUL.md` - 与 SKILL.md 保持一致
 
-### ⚠️ 废弃
+### 🗑️ 删除
 
-- `index.py` - 命令行入口（不再需要）
-- `scripts/main_agent.py` - 仅供参考
-- `scripts/developer_agent.py` - 仅供参考
-- `scripts/tester_agent.py` - 仅供参考
-- `scripts/researcher_agent.py` - 仅供参考
+- `index.py` - 命令行入口
+- `scripts/main_agent.py` - Python 主 Agent 实现
+- `scripts/developer_agent.py` - Python Developer 实现
+- `scripts/tester_agent.py` - Python Tester 实现
+- `scripts/researcher_agent.py` - Python Researcher 实现
 
-**注意:** Python 脚本保留作为参考，但不再执行。
+**注意:** v1.2.0 起完全改为提示词驱动，不再需要 Python 脚本。
 
 ### 🎯 核心改进
 

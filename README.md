@@ -113,17 +113,19 @@ COMPLETED ← TESTING ← IN_PROGRESS ←←←←←←←←←←←←←←
 ```
 skills/ai-dev-team/
 ├── SKILL.md                  # 技能说明（主 Agent 提示词）
-├── QUICKSTART.md             # 快速开始指南
 ├── README.md                 # 本文档
+├── QUICKSTART.md             # 快速开始指南
+├── SETUP_AND_TEST.md         # 配置与测试指南
+├── CHANGELOG.md              # 更新日志
 ├── agents/
 │   ├── main/SOUL.md          # 主 Agent 人格
 │   ├── developer/SOUL.md     # Developer Agent 人格
 │   ├── tester/SOUL.md        # Tester Agent 人格
 │   └── researcher/SOUL.md    # Researcher Agent 人格
 ├── scripts/
+│   ├── init_project.py       # 项目初始化（可选）
 │   ├── state_manager.py      # 状态机引擎（参考）
-│   ├── git_wrapper.py        # Git 封装（参考）
-│   └── init_project.py       # 项目初始化（可选）
+│   └── git_wrapper.py        # Git 封装（参考）
 ├── assets/
 │   ├── configs/default.json  # 默认配置
 │   └── templates/            # 报告模板
@@ -134,8 +136,6 @@ skills/ai-dev-team/
     ├── gateway.config.example.json  # 配置示例
     └── troubleshooting.md    # 故障排查
 ```
-
-**注意：** v1.2.0 起，主 Agent 由提示词驱动，Python 脚本仅供参考。
 
 ---
 
