@@ -1,0 +1,112 @@
+{
+  "agents": {
+    "list": [
+      {
+        "id": "ai-dev-team-main",
+        "name": "AI Dev Team CEO",
+        "default": false,
+        "workspace": "~/.openclaw/workspace-projects",
+        "sandbox": {
+          "mode": "off"
+        },
+        "subagents": {
+          "allowAgents": [
+            "ai-dev-team-developer",
+            "ai-dev-team-tester",
+            "ai-dev-team-researcher"
+          ],
+          "model": "bailian/qwen3.5-plus",
+          "thinking": "off",
+          "maxConcurrent": 1
+        }
+      },
+      {
+        "id": "ai-dev-team-developer",
+        "name": "Developer Agent",
+        "default": false,
+        "workspace": "~/.openclaw/workspace-projects",
+        "sandbox": {
+          "mode": "all",
+          "scope": "session"
+        },
+        "tools": {
+          "allow": ["read", "write", "edit", "apply_patch", "exec", "process", "web_search", "web_fetch"],
+          "deny": ["gateway", "cron", "sessions_list", "sessions_history", "sessions_send"]
+        }
+      },
+      {
+        "id": "ai-dev-team-tester",
+        "name": "Tester Agent",
+        "default": false,
+        "workspace": "~/.openclaw/workspace-projects",
+        "sandbox": {
+          "mode": "all",
+          "scope": "session"
+        },
+        "tools": {
+          "allow": ["read", "exec", "process"],
+          "deny": ["write", "edit", "apply_patch", "gateway", "cron", "sessions_list"]
+        }
+      },
+      {
+        "id": "ai-dev-team-researcher",
+        "name": "Researcher Agent",
+        "default": false,
+        "workspace": "~/.openclaw/workspace-projects",
+        "sandbox": {
+          "mode": "all",
+          "scope": "session"
+        },
+        "tools": {
+          "allow": ["read", "write", "web_search", "web_fetch"],
+          "deny": ["exec", "edit", "apply_patch", "gateway", "cron"]
+        }
+      }
+    ],
+    "defaults": {
+      "subagents": {
+        "archiveAfterMinutes": 60,
+        "model": "bailian/qwen3.5-plus",
+        "thinking": "off"
+      }
+    }
+  },
+  "tools": {
+    "subagents": {
+      "tools": {
+        "deny": ["gateway", "cron"]
+      }
+    }
+  },
+  "bindings": [
+    {
+      "agentId": "ai-dev-team-main",
+      "match": {
+        "provider": "webchat",
+        "accountId": "*",
+        "peer": {
+          "kind": "direct"
+        }
+      }
+    }
+  ],
+  "cron": {
+    "jobs": [
+      {
+        "id": "ai-dev-team-daily-review",
+        "name": "AI Dev Team 每日验收",
+        "schedule": {
+          "kind": "cron",
+          "expr": "0 20 * * *",
+          "tz": "Asia/Shanghai"
+        },
+        "payload": {
+          "kind": "systemEvent",
+          "text": "【定时验收提醒】\n\nAI Dev Team 主 Agent，现在是每日验收时间（20:00）。\n\n请检查：\n1. 有待验收的任务吗？\n2. 有已完成的开发需要测试吗？\n3. 需要发送日报给人类吗？\n\n如有待验收任务，请生成验收报告并发送给人类。"
+        },
+        "sessionTarget": "main",
+        "enabled": true
+      }
+    ]
+  }
+}

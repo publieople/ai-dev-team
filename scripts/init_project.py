@@ -1,75 +1,123 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 AI Dev Team - 项目初始化脚本
-创建 .ai-dev-team/ 目录结构和初始配置
+主 Agent 在检测到新 Git 项目时自动调用
 """
 
 import os
-import sys
 import json
 from pathlib import Path
+from datetime import datetime
 
-DEFAULT_CONFIG = {
-    "v": 1,
-    "project": {"n": "", "t": "auto", "ts": []},
-    "wf": {"aa": False, "rht": True, "mca": 1, "dto": "2h", "mr": 3},
-    "esc": {"th": 3, "cf": 3, "ta": "esc"},
-    "rep": {"fmt": "md", "ds": True, "id": True},
-    "git": {"ac": True, "cp": "[AI]", "tr": True, "bs": "direct"},
-    "toon": {"en": True, "cmp": "agg"}
-}
-
-def init_project(project_path="."):
-    """初始化AI开发团队项目"""
+def init_ai_dev_team(project_path: str = "."):
+    """初始化 AI Dev Team 项目结构"""
     
     project_path = Path(project_path).resolve()
+    
+    # 检查是否是 Git 仓库
+    if not (project_path / ".git").exists():
+        print("❌ 错误：当前目录不是 Git 仓库")
+        print("请先运行：git init")
+        return False
+    
     ai_dir = project_path / ".ai-dev-team"
     
-    # 检查Git仓库
-    git_dir = project_path / ".git"
-    if not git_dir.exists():
-        print("[ERROR] 当前目录不是Git仓库")
-        print("   请先运行: git init")
-        sys.exit(1)
+    # 检查是否已初始化
+    if ai_dir.exists():
+        print(f"⚠️  警告：{ai_dir} 已存在")
+        response = input("是否重新初始化？(y/n): ").strip().lower()
+        if response != 'y':
+            print("已取消")
+            return False
     
     # 创建目录结构
-    dirs = ["tasks", "reports", "logs"]
+    dirs = ["tasks", "reports", "docs", "logs"]
     for d in dirs:
         (ai_dir / d).mkdir(parents=True, exist_ok=True)
+        print(f"  ✓ 创建目录：.ai-dev-team/{d}/")
     
-    # 创建配置文件
+    # 创建默认配置
+    config = {
+        "workflow": {
+            "auto_approve": False,
+            "require_human_test": True,
+            "max_concurrent_agents": 1,
+            "max_retries": 3
+        },
+        "review": {
+            "schedule": "0 20 * * *",
+            "timezone": "Asia/Shanghai"
+        },
+        "git": {
+            "auto_commit": True,
+            "traceability": True
+        }
+    }
+    
     config_file = ai_dir / "config.json"
-    if not config_file.exists():
-        with open(config_file, "w", encoding="utf-8") as f:
-            json.dump(DEFAULT_CONFIG, f, indent=2, ensure_ascii=False)
-        print(f"[OK] 创建配置: {config_file}")
+    config_file.write_text(json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"  ✓ 创建配置：.ai-dev-team/config.json")
     
-    # 创建状态文件
+    # 创建初始状态
+    initial_state = {
+        "v": 1,
+        "tasks": {},
+        "queue": [],
+        "active": None,
+        "initialized_at": datetime.now().isoformat()
+    }
+    
     state_file = ai_dir / "state.json"
-    if not state_file.exists():
-        initial_state = {"v": 1, "tasks": {}, "queue": [], "active": None}
-        with open(state_file, "w", encoding="utf-8") as f:
-            json.dump(initial_state, f, indent=2)
-        print(f"[OK] 创建状态: {state_file}")
+    state_file.write_text(json.dumps(initial_state, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"  ✓ 创建状态：.ai-dev-team/state.json")
     
-    # 添加到.gitignore
-    gitignore = project_path / ".gitignore"
-    ignore_entry = ".ai-dev-team/logs/\n"
+    # 创建 README
+    readme_content = f"""# AI Dev Team 项目
+
+**项目名称:** {project_path.name}
+**初始化时间:** {datetime.now().isoformat()}
+
+## 目录结构
+
+```
+.ai-dev-team/
+├── config.json    # 配置
+├── state.json     # 状态机
+├── tasks/         # 任务卡片
+├── reports/       # 报告
+├── docs/          # 文档缓存
+└── logs/          # 日志
+```
+
+## 快速开始
+
+1. 主 Agent 会自动分析项目
+2. 生成任务列表
+3. 发送规划请人类批准
+4. 批准后开始开发
+
+## 验收时间
+
+每天 20:00（Asia/Shanghai）自动发送验收请求
+
+---
+
+*由 AI Dev Team 管理*
+"""
     
-    if gitignore.exists():
-        content = gitignore.read_text(encoding="utf-8")
-        if ignore_entry.strip() not in content:
-            with open(gitignore, "a", encoding="utf-8") as f:
-                f.write(f"\n# AI Dev Team\n{ignore_entry}")
-            print(f"[OK] 更新 .gitignore")
-    else:
-        gitignore.write_text(f"# AI Dev Team\n{ignore_entry}", encoding="utf-8")
-        print(f"[OK] 创建 .gitignore")
+    readme_file = ai_dir / "README.md"
+    readme_file.write_text(readme_content, encoding="utf-8")
+    print(f"  ✓ 创建说明：.ai-dev-team/README.md")
     
-    print(f"\n[DONE] 项目初始化完成!")
-    print(f"   目录: {ai_dir}")
-    print(f"\n下一步: 运行 '@ai-dev-team analyze' 开始项目分析")
+    print(f"\n✅ AI Dev Team 初始化完成！")
+    print(f"📁 项目目录：{ai_dir}")
+    print(f"\n下一步：主 Agent 将自动分析项目并生成任务列表")
+    
+    return True
 
 if __name__ == "__main__":
-    path = sys.argv[1] if len(sys.argv) > 1 else "."
-    init_project(path)
+    import sys
+    project_path = sys.argv[1] if len(sys.argv) > 1 else "."
+    success = init_ai_dev_team(project_path)
+    sys.exit(0 if success else 1)
